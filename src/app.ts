@@ -4,16 +4,17 @@ import fs from "fs";
 import { ethers } from "ethers";
 import { ensureLogsDir, formatDuration, OUTPUT_LOG, ROUTES_LOG } from "./utils";
 import apiRouter from "./api";
-import * as routerModule from "./routes"; // Safe import for ESModule/CommonJS
+import * as routerModule from "./routes"; // healthz, readyz, metrics
+import { logAllPaths } from "./graph";
 
 dotenv.config();
 ensureLogsDir();
 
 const router = routerModule.default || routerModule;
-
 const app = express();
+
 app.use(express.json());
-app.use("/api", apiRouter); // API endpoints
+app.use("/api", apiRouter); // your API endpoints
 app.use("/", router);        // healthz, readyz, metrics
 
 const port = process.env.PORT || 3000;
@@ -29,7 +30,7 @@ function heartbeatLogger() {
   }, 5000);
 }
 
-// Print uptime in console
+// Uptime logger in console
 function uptimeLogger() {
   let uptime = 0;
   setInterval(() => {
@@ -48,11 +49,23 @@ async function testEthereumConnection() {
   }
 }
 
+// Automatically log all swap routes every 60 seconds
+async function scheduleSwapRoutesLogging() {
+  try {
+    await logAllPaths(provider);
+  } catch (err: any) {
+    console.error("[ERROR] Failed to log swap routes:", err.message);
+  }
+  setTimeout(scheduleSwapRoutesLogging, 60 * 1000);
+}
+
+// Start the server
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
   uptimeLogger();
   heartbeatLogger();
   testEthereumConnection();
+  scheduleSwapRoutesLogging();
 });
 
-export default app; // optional, for testing or imports
+export default app;
